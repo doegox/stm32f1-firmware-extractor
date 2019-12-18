@@ -1,4 +1,5 @@
 import sys
+import math
 import argparse
 import struct
 import enum
@@ -134,16 +135,53 @@ def recover_pc(openocd):
 def align(address, base):
     return address - (address % base)
 
-def calculate_vtor_exc(address):
-    # Align vector table always to 32 words.
-    vtor_address = align(address, 32 * 4)
+def determine_num_ext_interrupts(openocd):
+    count = 0
+
+    # The ARMv7-M architecture supports up to 496 external interrupts.
+    for i in range(0, 496):
+        openocd.send('reset init')
+
+        register_offset = (i // 32) * 4
+        value = (1 << (i % 32))
+
+        # Enable and make interrupt pending.
+        openocd.write_memory(NVIC_ISER0_ADDR + register_offset, [value])
+        openocd.write_memory(NVIC_ISPR0_ADDR + register_offset, [value])
+
+        openocd.write_register(Register.PC, NOP_INST_ADDR)
+        # Ensure that the processor operates in Thumb mode.
+        openocd.write_register(Register.PSR, 0x01000000)
+        openocd.write_register(Register.SP, INITIAL_SP)
+
+        openocd.step()
+        xpsr = openocd.read_register(Register.PSR)
+        exception_number = xpsr & 0x1ff
+
+        if exception_number != (i + 16):
+            break
+
+        count += 1
+
+    return count
+
+def calculate_vtor_exc(address, num_exceptions):
+    # The vector table size must be a power of two.
+    table_size = 2 ** int(math.log(num_exceptions, 2))
+    vtor_address = align(address, table_size * 4)
 
     exception_number = (address - vtor_address) // 4
 
-    # Use the wrap-around behaviour to access an unreachable vector table entry.
-    if (vtor_address % (64 * 4)) != 0 \
-            and exception_number in INACCESSIBLE_EXC_NUMBERS:
-        exception_number += 32
+    if exception_number not in INACCESSIBLE_EXC_NUMBERS:
+        return (vtor_address, exception_number)
+
+    # Use the wrap-around behaviour to generate an exception for an inaccessible
+    # vector table entry.
+    # This is only possible when the vector table is not aligned to its size and
+    # the device has enough exceptions.
+    if (vtor_address % (table_size * 2 * 4)) != 0 \
+            and (exception_number + table_size) < num_exceptions:
+        exception_number += table_size
 
     return (vtor_address, exception_number)
 
@@ -188,8 +226,10 @@ if __name__ == '__main__':
     oocd.write_memory(LDR_INST_ADDR, [0x7b75], word_length=16)
     oocd.write_memory(UNDEF_INST_ADDR, [0xffff], word_length=16)
 
+    num_exceptions = 16 + determine_num_ext_interrupts(oocd)
+
     for address in range(start_address, start_address + (length * 4), 4):
-        (vtor_address, exception_number) = calculate_vtor_exc(address)
+        (vtor_address, exception_number) = calculate_vtor_exc(address, num_exceptions)
 
         if address == 0x00000000:
             oocd.send('reset halt')
