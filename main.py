@@ -42,6 +42,8 @@ class Register(enum.IntEnum):
     PC = 15
     PSR = 16
 
+WORD_SIZE = 4
+
 # Initial stack pointer (SP) value.
 INITIAL_SP = 0x20000200
 
@@ -120,7 +122,7 @@ def generate_exception(openocd, vt_address, exception_number):
         # Generate an external interrupt.
         ext_interrupt_number = exception_number - 16
 
-        register_offset = (ext_interrupt_number // 32) * 4
+        register_offset = (ext_interrupt_number // 32) * WORD_SIZE
         value = (1 << (ext_interrupt_number % 32))
 
         # Enable and make interrupt pending.
@@ -159,7 +161,7 @@ def determine_num_ext_interrupts(openocd):
     for i in range(0, 496):
         openocd.send('reset init')
 
-        register_offset = (i // 32) * 4
+        register_offset = (i // 32) * WORD_SIZE
         value = (1 << (i % 32))
 
         # Enable and make interrupt pending.
@@ -185,18 +187,18 @@ def determine_num_ext_interrupts(openocd):
 def calculate_vtor_exc(address, num_exceptions):
     # The vector table size must be a power of two.
     table_size = 2 ** int(math.log(num_exceptions, 2))
-    vtor_address = align(address, table_size * 4)
+    vtor_address = align(address, table_size * WORD_SIZE)
 
-    exception_number = (address - vtor_address) // 4
+    exception_number = (address - vtor_address) // WORD_SIZE
 
     if exception_number not in INACCESSIBLE_EXC_NUMBERS:
         return (vtor_address, exception_number)
 
-    # Use the wrap-around behaviour to generate an exception for an inaccessible
-    # vector table entry.
-    # This is only possible when the vector table is not aligned to its size and
-    # the device has enough exceptions.
-    if (vtor_address % (table_size * 2 * 4)) != 0 \
+    # Use the wrap-around behaviour to generate an exception for an
+    # inaccessible vector table entry.
+    # This is only possible when the vector table is not aligned to its size
+    # and the device has enough exceptions.
+    if (vtor_address % (table_size * 2 * WORD_SIZE)) != 0 \
             and (exception_number + table_size) < num_exceptions:
         exception_number += table_size
 
@@ -207,7 +209,8 @@ if __name__ == '__main__':
     parser.add_argument('address', help='Extraction start address')
     parser.add_argument('length', help='Number of words to extract')
     parser.add_argument('--value', default='0xffffffff',
-        help='Value to be used for non-extractable memory words. Use "skip" to ignore them')
+        help=('Value to be used for non-extractable memory words. '
+              'Use "skip" to ignore them'))
     parser.add_argument('--binary', action='store_true',
         help='Output binary')
     parser.add_argument('--host', default='localhost',
@@ -244,9 +247,11 @@ if __name__ == '__main__':
     oocd.write_memory(UNDEF_INST_ADDR, [0xffff], word_length=16)
 
     num_exceptions = 16 + determine_num_ext_interrupts(oocd)
+    end_address = start_address + (length * WORD_SIZE)
 
-    for address in range(start_address, start_address + (length * 4), 4):
-        (vtor_address, exception_number) = calculate_vtor_exc(address, num_exceptions)
+    for address in range(start_address, end_address, WORD_SIZE):
+        (vtor_address, exception_number) = calculate_vtor_exc(
+            address, num_exceptions)
 
         if address == 0x00000000:
             oocd.send('reset halt')
