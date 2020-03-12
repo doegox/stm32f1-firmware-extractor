@@ -1,0 +1,4 @@
+[submodule "firmware/libopencm3"]
+	path = firmware/libopencm3
+	url = https://github.com/libopencm3/libopencm3
+	branch = 78c23ba5
