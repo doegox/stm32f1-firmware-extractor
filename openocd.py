@@ -2,7 +2,7 @@
 ## OpenOCD remote procedure call (RPC) library.
 ##
 ## Copyright (C) 2014 Andreas Ortmann <ortmann@finf.uni-hannover.de>
-## Copyright (C) 2019 Marc Schink <dev@zabp.de>
+## Copyright (C) 2019 Marc Schink <dev@zapb.de>
 ##
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
