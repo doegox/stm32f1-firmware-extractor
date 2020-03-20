@@ -18,58 +18,39 @@
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
-import socket
+import telnetlib
 
 class OpenOcd:
-    COMMAND_TOKEN = '\x1a'
 
-    def __init__(self, host='localhost', port=6666):
-        self._tcl_rpc_host = host
-        self._tcl_rpc_port = port
-        self._buffer_size = 4096
+    def __init__(self, host='localhost', port=4444):
+        self.tn = telnetlib.Telnet(host, port)
+        #write_raw_sequence(self.tn, telnetlib.IAC + telnetlib.WILL + telnetlib.ECHO)
+        self.Readout()
 
         self._tcl_variable = 'python_tcl'
 
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    def __enter__(self):
-        self.connect()
-        return self
-
-    def __exit__(self, type, value, traceback):
-        try:
-            self.exit()
-        finally:
-            self.close()
-
-    def connect(self):
-        self._socket.connect((self._tcl_rpc_host, self._tcl_rpc_port))
-
-    def close(self):
-        self._socket.close()
-
-    def send(self, cmd):
-        data = (cmd + OpenOcd.COMMAND_TOKEN).encode('utf-8')
-        self._socket.send(data)
-
-        return self._recv()
-
-    def _recv(self):
-        data = bytes()
-
+    def Readout(self):
+        s = ''
+        Lines = []
         while True:
-            tmp = self._socket.recv(self._buffer_size)
-            data += tmp
+            s += self.tn.read_some().decode('utf8')
+            l = s.splitlines()
+            if len(l) > 1:
+                for s in l[:-1]:
+                    if len(s) > 0:
+                        Lines.append(s)
+                s = l[-1]
+            if s == '> ':
+                return Lines
 
-            if bytes(OpenOcd.COMMAND_TOKEN, encoding='utf-8') in tmp:
-                break
-
-        data = data.decode('utf-8').strip()
-
-        # Strip trailing command token.
-        data = data[:-1]
-
-        return data
+    def send(self, Cmd, *args):
+        Text = Cmd
+        for arg in args:
+            if arg:
+                Text += ' ' + arg
+        Text += '\n'
+        self.tn.write(Text.encode('utf8'))
+        return self.Readout()[-1]
 
     def exit(self):
         self.send('exit')

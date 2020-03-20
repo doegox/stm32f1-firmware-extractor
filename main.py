@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 ##
 ## Copyright (C) 2019 Marc Schink <dev@zapb.de>
 ##
@@ -215,7 +216,7 @@ if __name__ == '__main__':
         help='Output binary')
     parser.add_argument('--host', default='localhost',
         help='OpenOCD Tcl interface host')
-    parser.add_argument('--port', type=int, default=6666,
+    parser.add_argument('--port', type=int, default=4444,
         help='OpenOCD Tcl interface port')
     args = parser.parse_args()
 
@@ -228,11 +229,6 @@ if __name__ == '__main__':
         skip_value = int(skip_value, 0)
 
     oocd = OpenOcd(args.host, args.port)
-
-    try:
-        oocd.connect()
-    except Exception as e:
-        sys.exit('Failed to connect to OpenOCD')
 
     # Disable exception masking by OpenOCD. The target must be halted before
     # the masking behaviour can be changed.
