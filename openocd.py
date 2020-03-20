@@ -23,7 +23,8 @@ import socket
 class OpenOcd:
     COMMAND_TOKEN = '\x1a'
 
-    def __init__(self, host='localhost', port=6666):
+    def __init__(self, host='localhost', port=6666, verbose=False):
+        self._verbose = verbose
         self._tcl_rpc_host = host
         self._tcl_rpc_port = port
         self._buffer_size = 4096
@@ -50,6 +51,8 @@ class OpenOcd:
 
     def send(self, cmd):
         data = (cmd + OpenOcd.COMMAND_TOKEN).encode('utf-8')
+        if self._verbose:
+            print("<-", data)
         self._socket.send(data)
 
         return self._recv()
@@ -63,7 +66,8 @@ class OpenOcd:
 
             if bytes(OpenOcd.COMMAND_TOKEN, encoding='utf-8') in tmp:
                 break
-
+        if self._verbose:
+            print("->", data)
         data = data.decode('utf-8').strip()
 
         # Strip trailing command token.
@@ -120,9 +124,9 @@ class OpenOcd:
 
     def read_register(self, register):
         if issubclass(type(register), int):
-            raw = self.send('reg %u' % register).split(': ')
+            raw = self.send('capture "reg %u"' % register).split(': ')
         else:
-            raw = self.send('reg %s' % register).split(': ')
+            raw = self.send('capture "reg %s"' % register).split(': ')
 
         if len(raw) < 2:
             return None
