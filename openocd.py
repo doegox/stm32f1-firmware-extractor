@@ -168,5 +168,5 @@ class OpenOcd:
         else:
             self.send('bp 0x%x %u' % (address, length))
 
-    def remove_breakpoint(self):
+    def remove_breakpoint(self, address):
         self.send('rbp 0x%x' % address)
